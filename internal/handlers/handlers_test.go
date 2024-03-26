@@ -19,22 +19,44 @@ const (
 	validCity   = "moscow"
 	invalidCity = "izhevsk"
 	count       = 2
-	totalCount  = 4
 )
+
+type handlerFuncType func(w http.ResponseWriter, req *http.Request)
+
+func createGetReq(url string, query map[string]string) *http.Request {
+
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+
+	if len(query) > 0 {
+
+		q := req.URL.Query()
+		for k, v := range query {
+			q.Set(k, v)
+		}
+		req.URL.RawQuery = q.Encode()
+	}
+
+	return req
+}
+
+func createRecorder(handlerFunc handlerFuncType, req *http.Request) *httptest.ResponseRecorder {
+
+	responseRecorder := httptest.NewRecorder()
+	handler := http.HandlerFunc(handlerFunc)
+	handler.ServeHTTP(responseRecorder, req)
+
+	return responseRecorder
+}
 
 // Проверка, что API отвечает 200 при валидном запросе
 func TestMainHandlerWhenOk(t *testing.T) {
-	req := httptest.NewRequest("GET", "/cafe", nil)
 
-	q := req.URL.Query()
-	q.Set("count", strconv.Itoa(count))
-	q.Set("city", validCity)
-
-	req.URL.RawQuery = q.Encode()
-
-	responseRecorder := httptest.NewRecorder()
-	handler := http.HandlerFunc(MainHandle)
-	handler.ServeHTTP(responseRecorder, req)
+	query := map[string]string{
+		"count": strconv.Itoa(count),
+		"city":  validCity,
+	}
+	req := createGetReq("/cafe", query)
+	responseRecorder := createRecorder(MainHandle, req)
 
 	require.Equal(t, http.StatusOK, responseRecorder.Code)
 	require.NotEmpty(t, responseRecorder.Body.String())
@@ -43,17 +65,13 @@ func TestMainHandlerWhenOk(t *testing.T) {
 
 // Проверка, что API отвечает 400 при невалидном городе
 func TestMainHandlerWithoutCity(t *testing.T) {
-	req := httptest.NewRequest("GET", "/cafe", nil)
 
-	q := req.URL.Query()
-	q.Set("count", strconv.Itoa(count))
-	q.Set("city", invalidCity)
-
-	req.URL.RawQuery = q.Encode()
-
-	responseRecorder := httptest.NewRecorder()
-	handler := http.HandlerFunc(MainHandle)
-	handler.ServeHTTP(responseRecorder, req)
+	query := map[string]string{
+		"count": strconv.Itoa(count),
+		"city":  invalidCity,
+	}
+	req := createGetReq("/cafe", query)
+	responseRecorder := createRecorder(MainHandle, req)
 
 	require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	require.NotEmpty(t, responseRecorder.Body.String())
@@ -62,16 +80,14 @@ func TestMainHandlerWithoutCity(t *testing.T) {
 
 // Проверка, что API возвращает все кафе
 func TestMainHandlerWhenCountMoreThanTotal(t *testing.T) {
-	req := httptest.NewRequest("GET", "/cafe", nil)
 
-	q := req.URL.Query()
-	q.Set("count", strconv.Itoa(totalCount))
-	q.Set("city", validCity)
-	req.URL.RawQuery = q.Encode()
-
-	responseRecorder := httptest.NewRecorder()
-	handler := http.HandlerFunc(MainHandle)
-	handler.ServeHTTP(responseRecorder, req)
+	totalCount := len(cafeListTest[validCity])
+	query := map[string]string{
+		"count": strconv.Itoa(totalCount + 5),
+		"city":  validCity,
+	}
+	req := createGetReq("/cafe", query)
+	responseRecorder := createRecorder(MainHandle, req)
 
 	require.Equal(t, http.StatusOK, responseRecorder.Code)
 	require.NotEmpty(t, responseRecorder.Body.String())
